@@ -1,0 +1,10 @@
+{
+  "network": "sepolia",
+  "chainId": 11155111,
+  "contractAddress": "0x21496fae1cB670873ED228Ebb30265D42AD78538",
+  "deployerAddress": "0x6031f7908AfcD95bfB98C363af058CD05f93169F",
+  "deploymentBlock": null,
+  "deploymentTxHash": "0x64f283f750a8f99029e06bec353a721a49e0b7ce959087d4a83f970bdcc2984c",
+  "timestamp": "2025-10-23T12:08:23.955Z",
+  "contractName": "PrivateTrafficAggregator"
+}
