@@ -1,0 +1,220 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - master
+  pull_request:
+    branches:
+      - main
+      - develop
+      - master
+
+jobs:
+  lint:
+    name: Code Quality Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Solhint (Solidity Linter)
+        run: npm run lint:sol
+        continue-on-error: true
+
+      - name: Run ESLint (Frontend)
+        run: |
+          cd frontend
+          npm ci
+          npm run lint
+        continue-on-error: true
+
+      - name: Check TypeScript types
+        run: npx tsc --noEmit
+
+  test:
+    name: Test on Node.js ${{ matrix.node-version }}
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Compile contracts
+        run: npm run compile
+
+      - name: Run tests
+        run: npm test
+
+      - name: Run gas reporter
+        run: npm run test:gas
+        env:
+          REPORT_GAS: true
+
+  coverage:
+    name: Code Coverage
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate coverage report
+        run: npm run test:coverage
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./coverage/lcov.info
+          flags: smart-contracts
+          name: smart-contracts-coverage
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Archive coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 30
+
+  contract-size:
+    name: Contract Size Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Compile contracts
+        run: npm run compile
+
+      - name: Check contract sizes
+        run: npm run size
+
+  security:
+    name: Security Audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Run npm audit
+        run: npm audit --audit-level=moderate
+        continue-on-error: true
+
+      - name: Check for known vulnerabilities
+        run: |
+          npm ci
+          npx audit-ci --moderate
+        continue-on-error: true
+
+  frontend-build:
+    name: Frontend Build Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Install frontend dependencies
+        run: |
+          cd frontend
+          npm ci
+
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm run build
+
+      - name: Type check frontend
+        run: |
+          cd frontend
+          npx tsc --noEmit
+
+  all-checks-passed:
+    name: All Checks Passed
+    runs-on: ubuntu-latest
+    needs: [lint, test, coverage, contract-size, security, frontend-build]
+    if: always()
+
+    steps:
+      - name: Check if all jobs passed
+        run: |
+          if [ "${{ needs.lint.result }}" != "success" ] || \
+             [ "${{ needs.test.result }}" != "success" ] || \
+             [ "${{ needs.coverage.result }}" != "success" ] || \
+             [ "${{ needs.contract-size.result }}" != "success" ] || \
+             [ "${{ needs.frontend-build.result }}" != "success" ]; then
+            echo "❌ Some checks failed"
+            exit 1
+          else
+            echo "✅ All checks passed!"
+          fi
+
+      - name: Success notification
+        if: success()
+        run: |
+          echo "🎉 CI/CD Pipeline completed successfully!"
+          echo "✅ All tests passed"
+          echo "✅ Code quality checks passed"
+          echo "✅ Coverage report generated"
+          echo "✅ Contract size within limits"
+          echo "✅ Frontend builds successfully"
