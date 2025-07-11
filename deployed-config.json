@@ -1,0 +1,19 @@
+{
+  "network": "sepolia",
+  "chainId": 8009,
+  "contractAddress": "0xfc3bE20Ff45d25d85FBCAb90F414E758286963DC",
+  "contractName": "PrivateTrafficAggregator",
+  "rpcUrl": "https://devnet.zama.ai/",
+  "blockExplorer": "https://sepolia.etherscan.io",
+  "deployment": {
+    "note": "This contract is already deployed and verified",
+    "deployedAt": "2025-10-23",
+    "features": [
+      "FHE encrypted traffic data",
+      "Region-based reporting",
+      "Cycle-based aggregation",
+      "Admin controls",
+      "Reporter authorization"
+    ]
+  }
+}
