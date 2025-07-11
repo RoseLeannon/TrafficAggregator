@@ -25,9 +25,9 @@ Private Traffic Aggregator enables cities and transportation authorities to coll
 
 ## 🌐 Live Application
 
-**Website**: [https://private-traffic-aggregator.vercel.app/](https://private-traffic-aggregator.vercel.app/)
+**Website**: [https://traffic-aggregator.vercel.app/](https://traffic-aggregator.vercel.app/)
 
-**GitHub Repository**: [https://github.com/RoseLeannon/PrivateTrafficAggregator](https://github.com/RoseLeannon/PrivateTrafficAggregator)
+**GitHub Repository**: [https://github.com/RoseLeannon/TrafficAggregator](https://github.com/RoseLeannon/TrafficAggregator)
 
 ## 📋 Smart Contract Information
 
@@ -208,7 +208,7 @@ MetaMask or compatible Web3 wallet
 ### Installation
 ```bash
 # Clone the repository
-git clone https://github.com/RoseLeannon/PrivateTrafficAggregator.git
+git clone https://github.com/RoseLeannon/TrafficAggregator.git
 cd PrivateTrafficAggregator
 
 # Install dependencies
@@ -409,7 +409,7 @@ PrivateTrafficAggregator/
 ### For Users
 
 1. **Access the Application**
-   - Visit: https://private-traffic-aggregator.vercel.app/
+   - Visit: https://traffic-aggregator.vercel.app/
    - Connect your Web3 wallet (MetaMask recommended)
    - Switch to Zama Sepolia Testnet (Chain ID: 8009)
 
