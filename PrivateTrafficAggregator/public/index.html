@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Private Traffic Analytics</title>
+    <meta name="description" content="Confidential traffic data aggregation using Zama FHE encryption">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚦</text></svg>">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            margin-bottom: 30px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+            font-size: 2.5rem;
+        }
+
+        .header p {
+            color: #7f8c8d;
+            font-size: 1.1rem;
+        }
+
+        .status-bar {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .status-item {
+            text-align: center;
+        }
+
+        .status-label {
+            font-size: 0.9rem;
+            color: #7f8c8d;
+            margin-bottom: 5px;
+        }
+
+        .status-value {
+            font-size: 1.4rem;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .panel {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        .panel h2 {
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #2c3e50;
+            font-weight: 600;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #3498db;
+            box-shadow: 0 0 10px rgba(52, 152, 219, 0.2);
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+            margin-top: 10px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(52, 152, 219, 0.3);
+        }
+
+        .btn:disabled {
+            background: #95a5a6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #95a5a6, #7f8c8d);
+        }
+
+        .btn-admin {
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+        }
+
+        .data-grid {
+            grid-column: 1 / -1;
+        }
+
+        .region-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .region-card {
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            border-radius: 12px;
+            padding: 20px;
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .region-card:hover {
+            border-color: #3498db;
+            transform: translateY(-3px);
+        }
+
+        .region-card h4 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+        }
+
+        .metric-label {
+            color: #7f8c8d;
+        }
+
+        .metric-value {
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            font-weight: 500;
+        }
+
+        .status-connected {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status-disconnected {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        .indicator-green {
+            background: #28a745;
+        }
+
+        .indicator-red {
+            background: #dc3545;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .slider-container {
+            position: relative;
+            margin: 10px 0;
+        }
+
+        .slider-value {
+            display: inline-block;
+            margin-left: 10px;
+            font-weight: bold;
+            color: #3498db;
+            min-width: 50px;
+        }
+
+        .error-message {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border: 1px solid #f5c6cb;
+        }
+
+        .success-message {
+            background: #d4edda;
+            color: #155724;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border: 1px solid #c3e6cb;
+        }
+
+        .network-info {
+            background: #e7f3ff;
+            border: 1px solid #b3d9ff;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .network-info h3 {
+            color: #0066cc;
+            margin-bottom: 10px;
+        }
+
+        .admin-warning {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            font-size: 0.9rem;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+
+            .status-bar {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .container {
+                padding: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚦 Private Traffic Analytics</h1>
+            <p>Confidential traffic data aggregation using Zama FHE encryption</p>
+        </div>
+
+        <div class="connection-status" id="connectionStatus">
+            <span class="status-indicator indicator-red"></span>
+            <span>Connecting to Web3...</span>
+        </div>
+
+        <div class="network-info" id="networkInfo" style="display: none;">
+            <h3>🌐 Network Information</h3>
+            <p><strong>Network:</strong> <span id="networkName">-</span></p>
+            <p><strong>Contract:</strong> <span id="contractAddress">-</span></p>
+        </div>
+
+        <div class="status-bar">
+            <div class="status-item">
+                <div class="status-label">Current Cycle</div>
+                <div class="status-value" id="currentCycle">-</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Time Remaining</div>
+                <div class="status-value" id="timeRemaining">-</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Total Reports</div>
+                <div class="status-value" id="totalReports">-</div>
+            </div>
+            <div class="status-item">
+                <div class="status-label">Active Regions</div>
+                <div class="status-value" id="activeRegions">-</div>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="panel">
+                <h2>📊 Submit Traffic Report</h2>
+                <form id="reportForm">
+                    <div class="form-group">
+                        <label for="regionSelect">Select Region:</label>
+                        <select id="regionSelect" required>
+                            <option value="">Choose a region...</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="congestionLevel">Congestion Level (0-100%):</label>
+                        <div class="slider-container">
+                            <input type="range" id="congestionLevel" min="0" max="100" value="50">
+                            <span class="slider-value" id="congestionValue">50%</span>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="vehicleCount">Vehicle Count (estimated):</label>
+                        <input type="number" id="vehicleCount" min="0" max="255" value="20" placeholder="Enter estimated vehicle count">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="averageSpeed">Average Speed (km/h):</label>
+                        <input type="number" id="averageSpeed" min="0" max="300" value="60" placeholder="Enter average speed">
+                    </div>
+
+                    <button type="submit" class="btn" id="submitBtn">
+                        Submit Encrypted Report
+                    </button>
+                </form>
+            </div>
+
+            <div class="panel">
+                <h2>⚙️ Admin Controls</h2>
+                <div class="admin-warning">
+                    ⚠️ Admin functions require contract owner privileges
+                </div>
+
+                <div class="form-group">
+                    <label for="newRegion">Register New Region:</label>
+                    <input type="text" id="newRegion" placeholder="Enter region name (e.g., Downtown, Highway-A1)">
+                    <button type="button" class="btn btn-admin" onclick="registerRegion()">
+                        Register Region
+                    </button>
+                </div>
+
+                <div class="form-group">
+                    <label for="reporterAddress">Authorize Reporter:</label>
+                    <input type="text" id="reporterAddress" placeholder="0x... (Ethereum address)">
+                    <button type="button" class="btn btn-admin" onclick="authorizeReporter()">
+                        Authorize Reporter
+                    </button>
+                </div>
+
+                <div class="form-group">
+                    <label for="cycleInterval">Cycle Interval (seconds):</label>
+                    <input type="number" id="cycleInterval" min="300" max="86400" value="3600" placeholder="3600 (1 hour)">
+                    <button type="button" class="btn btn-admin" onclick="setCycleInterval()">
+                        Update Interval
+                    </button>
+                </div>
+
+                <div class="form-group">
+                    <button type="button" class="btn btn-admin" onclick="registerAllDefaultRegions()">
+                        📍 Register All Default Regions
+                    </button>
+                </div>
+
+                <div class="form-group">
+                    <button type="button" class="btn btn-secondary" onclick="finalizeCycle()">
+                        Finalize Current Cycle
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel data-grid">
+            <h2>🌍 Regional Traffic Overview</h2>
+            <div class="region-list" id="regionList">
+                <div style="text-align: center; padding: 40px; color: #7f8c8d;">
+                    Loading region data...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+    <script>
+        // Fallback CDN for ethers.js
+        if (typeof ethers === 'undefined') {
+            document.write('<script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"><\/script>');
+        }
+    </script>
+    <script>
+        // Configuration - Update these values for your deployment
+        const CONFIG = {
+            CONTRACT_ADDRESS: "0xfc3bE20Ff45d25d85FBCAb90F414E758286963DC", // Replace with your deployed contract address
+            NETWORK_NAME: "Zama Devnet", // Update with your network name
+            CHAIN_ID: 8009, // Update with your chain ID
+            RPC_URL: "https://devnet.zama.ai/" // Update with your RPC URL
+        };
+
+        const CONTRACT_ABI = [
+            "function submitTrafficReport(string memory region, uint8 congestionLevel, uint8 vehicleCount, uint16 averageSpeed) external",
+            "function registerRegion(string memory regionName) external",
+            "function authorizeReporter(address reporter) external",
+            "function revokeReporter(address reporter) external",
+            "function setCycleInterval(uint256 newInterval) external",
+            "function getCurrentCycleInfo() external view returns (uint256, uint256, uint256)",
+            "function getRegisteredRegions() external view returns (string[] memory)",
+            "function getRegionStats(string memory region, uint256 cycle) external view returns (uint256, uint256, bool)",
+            "function getCycleAggregate(uint256 cycle) external view returns (uint256, uint256, uint256, bool)",
+            "function hasReported(string memory region, address reporter, uint256 cycle) external view returns (bool)",
+            "function getRegionReporters(string memory region, uint256 cycle) external view returns (address[] memory)",
+            "function isReporterAuthorized(address reporter) external view returns (bool)",
+            "function getReportTimestamp(string memory region, address reporter, uint256 cycle) external view returns (uint256)",
+            "function manuallyFinalizeCycle() external",
+            "function forceAdvanceCycle() external",
+            "function transferAdmin(address newAdmin) external",
+            "function admin() external view returns (address)"
+        ];
+
+        // Global variables
+        let provider;
+        let signer;
+        let contract;
+        let userAccount;
+        let isAdmin = false;
+
+        // Initialize the application
+        async function init() {
+            try {
+                // Check if ethers is loaded
+                if (typeof ethers === 'undefined') {
+                    throw new Error("Ethers.js library failed to load. Please check your internet connection and try refreshing the page.");
+                }
+
+                await connectWallet();
+                await loadRegions();
+                await checkAdminStatus();
+                startStatusUpdates();
+                setupEventListeners();
+                showMessage("Application initialized successfully!", "success");
+            } catch (error) {
+                console.error("Initialization failed:", error);
+                showMessage("Failed to initialize application: " + error.message, "error");
+            }
+        }
+
+        // Connect to Web3 wallet
+        async function connectWallet() {
+            try {
+                if (typeof window.ethereum !== 'undefined') {
+                    await window.ethereum.request({ method: 'eth_requestAccounts' });
+                    provider = new ethers.providers.Web3Provider(window.ethereum);
+                    signer = provider.getSigner();
+                    userAccount = await signer.getAddress();
+                    contract = new ethers.Contract(CONFIG.CONTRACT_ADDRESS, CONTRACT_ABI, signer);
+
+                    const network = await provider.getNetwork();
+                    updateConnectionStatus(true);
+                    updateNetworkInfo(network);
+                } else {
+                    throw new Error("MetaMask not detected. Please install MetaMask to continue.");
+                }
+            } catch (error) {
+                console.error("Wallet connection failed:", error);
+                updateConnectionStatus(false, error.message);
+                throw error;
+            }
+        }
+
+        // Update connection status display
+        function updateConnectionStatus(connected, message = "") {
+            const statusEl = document.getElementById('connectionStatus');
+
+            if (connected) {
+                statusEl.className = 'connection-status status-connected';
+                statusEl.innerHTML = `
+                    <span class="status-indicator indicator-green"></span>
+                    <span>Connected: ${userAccount ? userAccount.substring(0, 6) + '...' + userAccount.substring(userAccount.length - 4) : 'Web3'}</span>
+                `;
+            } else {
+                statusEl.className = 'connection-status status-disconnected';
+                statusEl.innerHTML = `
+                    <span class="status-indicator indicator-red"></span>
+                    <span>${message || 'Disconnected from Web3'}</span>
+                `;
+            }
+        }
+
+        // Update network information
+        function updateNetworkInfo(network) {
+            const networkInfo = document.getElementById('networkInfo');
+            const networkName = document.getElementById('networkName');
+            const contractAddress = document.getElementById('contractAddress');
+
+            networkName.textContent = CONFIG.NETWORK_NAME + ' (Chain ID: ' + network.chainId + ')';
+            contractAddress.textContent = CONFIG.CONTRACT_ADDRESS;
+            networkInfo.style.display = 'block';
+        }
+
+        // Check if current user is admin
+        async function checkAdminStatus() {
+            try {
+                if (!contract) return;
+
+                const adminAddress = await contract.admin();
+                isAdmin = adminAddress.toLowerCase() === userAccount.toLowerCase();
+
+                // Update admin controls visibility
+                const adminButtons = document.querySelectorAll('.btn-admin');
+                adminButtons.forEach(btn => {
+                    if (!isAdmin) {
+                        btn.disabled = true;
+                        btn.title = "Admin privileges required";
+                    }
+                });
+
+                if (isAdmin) {
+                    showMessage("Admin privileges detected", "success");
+                }
+            } catch (error) {
+                console.error("Failed to check admin status:", error);
+            }
+        }
+
+        // Default regions as fallback
+        const DEFAULT_REGIONS = [
+            "Downtown",
+            "Highway-A1",
+            "Highway-A2",
+            "Industrial District",
+            "Residential Area",
+            "Shopping Center",
+            "Airport Road",
+            "City Center",
+            "Business District",
+            "Suburban Area"
+        ];
+
+        // Load available regions
+        async function loadRegions() {
+            try {
+                let contractRegions = [];
+                let usingDefaults = false;
+
+                if (contract) {
+                    try {
+                        contractRegions = await contract.getRegisteredRegions();
+                    } catch (contractError) {
+                        console.warn("Failed to load regions from contract:", contractError);
+                        showMessage("Unable to load regions from contract. Showing default regions for demo only.", "error");
+                        usingDefaults = true;
+                    }
+                }
+
+                const regionSelect = document.getElementById('regionSelect');
+                regionSelect.innerHTML = '<option value="">Choose a region...</option>';
+
+                if (contractRegions.length > 0) {
+                    // Show contract regions first
+                    contractRegions.forEach(region => {
+                        regionSelect.innerHTML += `<option value="${region}">${region} ✅</option>`;
+                    });
+
+                    // Also show default regions as options (but mark them differently)
+                    DEFAULT_REGIONS.forEach(region => {
+                        if (!contractRegions.includes(region)) {
+                            regionSelect.innerHTML += `<option value="${region}" style="color: #888;">${region} (Not Registered)</option>`;
+                        }
+                    });
+
+                    showMessage(`${contractRegions.length} regions loaded from contract. ✅ = Registered regions can submit reports.`, "success");
+                    await loadRegionData(contractRegions.concat(DEFAULT_REGIONS.filter(r => !contractRegions.includes(r))));
+                    document.getElementById('activeRegions').textContent = contractRegions.length;
+                } else {
+                    // No contract regions, show defaults for demo
+                    DEFAULT_REGIONS.forEach(region => {
+                        regionSelect.innerHTML += `<option value="${region}" style="color: #888;">${region} (Demo Only)</option>`;
+                    });
+
+                    if (usingDefaults || !contract) {
+                        showMessage("No regions registered in contract. Default regions shown for demo only - submissions will fail.", "error");
+                    } else {
+                        showMessage("No regions registered yet. Admin can register regions using the admin panel.", "success");
+                    }
+
+                    await loadRegionData(DEFAULT_REGIONS);
+                    document.getElementById('activeRegions').textContent = 0;
+                }
+            } catch (error) {
+                console.error("Failed to load regions:", error);
+                showMessage("Failed to load regions: " + error.message, "error");
+
+                // Fallback to default regions even on error
+                const regionSelect = document.getElementById('regionSelect');
+                regionSelect.innerHTML = '<option value="">Choose a region...</option>';
+                DEFAULT_REGIONS.forEach(region => {
+                    regionSelect.innerHTML += `<option value="${region}" style="color: #888;">${region} (Demo Only)</option>`;
+                });
+                document.getElementById('activeRegions').textContent = 0;
+            }
+        }
+
+        // Load region statistics
+        async function loadRegionData(regions) {
+            const regionList = document.getElementById('regionList');
+
+            if (regions.length === 0) {
+                regionList.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: #7f8c8d;">
+                        No regions registered yet. Admin can register regions using the admin panel.
+                    </div>
+                `;
+                return;
+            }
+
+            regionList.innerHTML = '';
+            let totalReports = 0;
+
+            for (const region of regions) {
+                try {
+                    // Try to get contract data if available
+                    if (contract) {
+                        const cycleInfo = await contract.getCurrentCycleInfo();
+                        const currentCycle = cycleInfo[0].toNumber();
+                        const stats = await contract.getRegionStats(region, currentCycle);
+
+                        totalReports += stats[0].toNumber();
+
+                        const regionCard = document.createElement('div');
+                        regionCard.className = 'region-card';
+                        regionCard.innerHTML = `
+                            <h4>${region}</h4>
+                            <div class="metric">
+                                <span class="metric-label">Reports This Cycle:</span>
+                                <span class="metric-value">${stats[0].toNumber()}</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">Last Update:</span>
+                                <span class="metric-value">${stats[1] > 0 ? new Date(stats[1] * 1000).toLocaleString() : 'No data'}</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">Status:</span>
+                                <span class="metric-value" style="color: ${stats[2] ? '#27ae60' : '#e74c3c'}">${stats[2] ? 'Active' : 'Inactive'}</span>
+                            </div>
+                        `;
+                        regionList.appendChild(regionCard);
+                    } else {
+                        // Show default/demo data when contract is not available
+                        const regionCard = document.createElement('div');
+                        regionCard.className = 'region-card';
+                        regionCard.innerHTML = `
+                            <h4>${region}</h4>
+                            <div class="metric">
+                                <span class="metric-label">Reports This Cycle:</span>
+                                <span class="metric-value">0</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">Last Update:</span>
+                                <span class="metric-value">No data</span>
+                            </div>
+                            <div class="metric">
+                                <span class="metric-label">Status:</span>
+                                <span class="metric-value" style="color: #95a5a6">Demo Mode</span>
+                            </div>
+                        `;
+                        regionList.appendChild(regionCard);
+                    }
+                } catch (error) {
+                    console.error(`Failed to load data for ${region}:`, error);
+
+                    const regionCard = document.createElement('div');
+                    regionCard.className = 'region-card';
+                    regionCard.innerHTML = `
+                        <h4>${region}</h4>
+                        <div class="metric">
+                            <span class="metric-label">Reports This Cycle:</span>
+                            <span class="metric-value">0</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Last Update:</span>
+                            <span class="metric-value">No data</span>
+                        </div>
+                        <div class="metric">
+                            <span class="metric-label">Status:</span>
+                            <span class="metric-value" style="color: #e74c3c">Error loading data</span>
+                        </div>
+                    `;
+                    regionList.appendChild(regionCard);
+                }
+            }
+
+            document.getElementById('totalReports').textContent = totalReports;
+        }
+
+        // Update cycle information
+        async function updateCycleInfo() {
+            try {
+                if (!contract) return;
+
+                const cycleInfo = await contract.getCurrentCycleInfo();
+                const currentCycle = cycleInfo[0].toNumber();
+                const timeRemaining = cycleInfo[1].toNumber();
+
+                document.getElementById('currentCycle').textContent = currentCycle;
+                document.getElementById('timeRemaining').textContent = formatTime(timeRemaining);
+            } catch (error) {
+                console.error("Failed to update cycle info:", error);
+            }
+        }
+
+        // Format time remaining
+        function formatTime(seconds) {
+            if (seconds <= 0) return "Cycle ending...";
+
+            const hours = Math.floor(seconds / 3600);
+            const minutes = Math.floor((seconds % 3600) / 60);
+            const secs = seconds % 60;
+
+            if (hours > 0) {
+                return `${hours}h ${minutes}m`;
+            } else if (minutes > 0) {
+                return `${minutes}m ${secs}s`;
+            }
+            return `${secs}s`;
+        }
+
+        // Start periodic updates
+        function startStatusUpdates() {
+            updateCycleInfo();
+            setInterval(() => {
+                updateCycleInfo();
+            }, 30000); // Update every 30 seconds
+        }
+
+        // Setup event listeners
+        function setupEventListeners() {
+            // Congestion level slider
+            const congestionSlider = document.getElementById('congestionLevel');
+            const congestionValue = document.getElementById('congestionValue');
+
+            congestionSlider.addEventListener('input', (e) => {
+                congestionValue.textContent = e.target.value + '%';
+            });
+
+            // Form submission
+            document.getElementById('reportForm').addEventListener('submit', submitReport);
+        }
+
+        // Submit traffic report
+        async function submitReport(e) {
+            e.preventDefault();
+
+            if (!contract) {
+                showMessage('Please connect your wallet first. Note: Default regions are for demo only.', 'error');
+                return;
+            }
+
+            const submitBtn = document.getElementById('submitBtn');
+            const originalText = submitBtn.textContent;
+
+            try {
+                // Validate inputs
+                const region = document.getElementById('regionSelect').value;
+                const congestion = parseInt(document.getElementById('congestionLevel').value);
+                const vehicles = parseInt(document.getElementById('vehicleCount').value);
+                const speed = parseInt(document.getElementById('averageSpeed').value);
+
+                if (!region) {
+                    showMessage('Please select a region', 'error');
+                    return;
+                }
+
+                // Check if region is registered in contract
+                try {
+                    const registeredRegions = await contract.getRegisteredRegions();
+                    if (!registeredRegions.includes(region)) {
+                        showMessage(`Region "${region}" is not registered in the contract. Please ask an admin to register it first, or choose a registered region.`, 'error');
+                        return;
+                    }
+                } catch (regionCheckError) {
+                    console.warn("Could not verify region registration:", regionCheckError);
+                    showMessage('Warning: Unable to verify region registration. Proceeding with submission...', 'success');
+                }
+
+                if (isNaN(vehicles) || vehicles < 0 || vehicles > 255) {
+                    showMessage('Vehicle count must be between 0 and 255', 'error');
+                    return;
+                }
+
+                if (isNaN(speed) || speed < 0 || speed > 300) {
+                    showMessage('Speed must be between 0 and 300 km/h', 'error');
+                    return;
+                }
+
+                // Check if already reported this cycle
+                const cycleInfo = await contract.getCurrentCycleInfo();
+                const currentCycle = cycleInfo[0].toNumber();
+                const hasReported = await contract.hasReported(region, userAccount, currentCycle);
+
+                if (hasReported) {
+                    showMessage('You have already reported for this region in the current cycle', 'error');
+                    return;
+                }
+
+                submitBtn.innerHTML = '<span class="loading"></span> Encrypting & Submitting...';
+                submitBtn.disabled = true;
+
+                const tx = await contract.submitTrafficReport(region, congestion, vehicles, speed);
+
+                showMessage('Transaction submitted! Waiting for confirmation...', 'success');
+
+                await tx.wait();
+
+                showMessage('Traffic report submitted successfully! Your data has been encrypted and added to the aggregation.', 'success');
+
+                // Reset form and refresh data
+                document.getElementById('reportForm').reset();
+                document.getElementById('congestionLevel').value = 50;
+                document.getElementById('congestionValue').textContent = '50%';
+                document.getElementById('vehicleCount').value = 20;
+                document.getElementById('averageSpeed').value = 60;
+
+                loadRegions();
+
+            } catch (error) {
+                console.error("Submission failed:", error);
+                let errorMessage = 'Failed to submit report: ';
+
+                if (error.message.includes('Not authorized reporter')) {
+                    errorMessage += 'You are not authorized to submit reports. Contact the admin for authorization.';
+                } else if (error.message.includes('Invalid region')) {
+                    errorMessage += 'Invalid region selected.';
+                } else if (error.message.includes('Already reported')) {
+                    errorMessage += 'You have already reported for this region in the current cycle.';
+                } else {
+                    errorMessage += error.message;
+                }
+
+                showMessage(errorMessage, 'error');
+            } finally {
+                submitBtn.textContent = originalText;
+                submitBtn.disabled = false;
+            }
+        }
+
+        // Admin functions
+        async function registerRegion() {
+            const regionName = document.getElementById('newRegion').value.trim();
+            if (!regionName) {
+                showMessage('Please enter a region name', 'error');
+                return;
+            }
+
+            if (!isAdmin) {
+                showMessage('Admin privileges required', 'error');
+                return;
+            }
+
+            try {
+                const tx = await contract.registerRegion(regionName);
+                showMessage('Transaction submitted! Waiting for confirmation...', 'success');
+                await tx.wait();
+                showMessage('Region registered successfully!', 'success');
+                document.getElementById('newRegion').value = '';
+                loadRegions();
+            } catch (error) {
+                console.error("Failed to register region:", error);
+                showMessage('Failed to register region: ' + error.message, 'error');
+            }
+        }
+
+        async function authorizeReporter() {
+            const address = document.getElementById('reporterAddress').value.trim();
+            if (!ethers.utils.isAddress(address)) {
+                showMessage('Please enter a valid Ethereum address', 'error');
+                return;
+            }
+
+            if (!isAdmin) {
+                showMessage('Admin privileges required', 'error');
+                return;
+            }
+
+            try {
+                const tx = await contract.authorizeReporter(address);
+                showMessage('Transaction submitted! Waiting for confirmation...', 'success');
+                await tx.wait();
+                showMessage('Reporter authorized successfully!', 'success');
+                document.getElementById('reporterAddress').value = '';
+            } catch (error) {
+                console.error("Failed to authorize reporter:", error);
+                showMessage('Failed to authorize reporter: ' + error.message, 'error');
+            }
+        }
+
+        async function setCycleInterval() {
+            const interval = parseInt(document.getElementById('cycleInterval').value);
+            if (interval < 300 || interval > 86400) {
+                showMessage('Interval must be between 300 and 86400 seconds (5 minutes to 24 hours)', 'error');
+                return;
+            }
+
+            if (!isAdmin) {
+                showMessage('Admin privileges required', 'error');
+                return;
+            }
+
+            try {
+                const tx = await contract.setCycleInterval(interval);
+                showMessage('Transaction submitted! Waiting for confirmation...', 'success');
+                await tx.wait();
+                showMessage('Cycle interval updated successfully!', 'success');
+            } catch (error) {
+                console.error("Failed to update interval:", error);
+                showMessage('Failed to update interval: ' + error.message, 'error');
+            }
+        }
+
+        async function registerAllDefaultRegions() {
+            if (!isAdmin) {
+                showMessage('Admin privileges required', 'error');
+                return;
+            }
+
+            if (!contract) {
+                showMessage('Contract not connected', 'error');
+                return;
+            }
+
+            try {
+                const existingRegions = await contract.getRegisteredRegions();
+                const regionsToRegister = DEFAULT_REGIONS.filter(region => !existingRegions.includes(region));
+
+                if (regionsToRegister.length === 0) {
+                    showMessage('All default regions are already registered!', 'success');
+                    return;
+                }
+
+                showMessage(`Registering ${regionsToRegister.length} default regions...`, 'success');
+
+                for (let i = 0; i < regionsToRegister.length; i++) {
+                    const region = regionsToRegister[i];
+                    try {
+                        showMessage(`Registering region ${i + 1}/${regionsToRegister.length}: ${region}...`, 'success');
+                        const tx = await contract.registerRegion(region);
+                        await tx.wait();
+                        showMessage(`✅ Region "${region}" registered successfully!`, 'success');
+                    } catch (error) {
+                        console.error(`Failed to register region ${region}:`, error);
+                        showMessage(`❌ Failed to register region "${region}": ${error.message}`, 'error');
+                    }
+                }
+
+                // Refresh the regions list
+                await loadRegions();
+                showMessage(`🎉 Finished registering default regions! Refresh the page to see all registered regions.`, 'success');
+
+            } catch (error) {
+                console.error("Failed to register default regions:", error);
+                showMessage('Failed to register default regions: ' + error.message, 'error');
+            }
+        }
+
+        async function finalizeCycle() {
+            if (!isAdmin) {
+                showMessage('Admin privileges required', 'error');
+                return;
+            }
+
+            try {
+                const tx = await contract.manuallyFinalizeCycle();
+                showMessage('Transaction submitted! Waiting for confirmation...', 'success');
+                await tx.wait();
+                showMessage('Cycle finalized successfully!', 'success');
+                updateCycleInfo();
+                loadRegions();
+            } catch (error) {
+                console.error("Failed to finalize cycle:", error);
+                showMessage('Failed to finalize cycle: ' + error.message, 'error');
+            }
+        }
+
+        // Show success/error messages
+        function showMessage(message, type) {
+            // Remove existing messages
+            const existingMessages = document.querySelectorAll('.success-message, .error-message');
+            existingMessages.forEach(msg => msg.remove());
+
+            const messageDiv = document.createElement('div');
+            messageDiv.className = type === 'success' ? 'success-message' : 'error-message';
+            messageDiv.textContent = message;
+
+            // Insert after connection status
+            const connectionStatus = document.getElementById('connectionStatus');
+            connectionStatus.parentNode.insertBefore(messageDiv, connectionStatus.nextSibling);
+
+            // Auto-remove after 10 seconds
+            setTimeout(() => {
+                if (messageDiv.parentNode) {
+                    messageDiv.remove();
+                }
+            }, 10000);
+        }
+
+        // Initialize when page loads
+        window.addEventListener('load', () => {
+            // Add a small delay to ensure scripts are fully loaded
+            setTimeout(init, 100);
+        });
+
+        // Handle account changes
+        if (window.ethereum) {
+            window.ethereum.on('accountsChanged', (accounts) => {
+                if (accounts.length === 0) {
+                    updateConnectionStatus(false, "Account disconnected");
+                    showMessage("Account disconnected. Please connect your wallet.", "error");
+                } else {
+                    showMessage("Account changed. Reinitializing...", "success");
+                    setTimeout(init, 1000);
+                }
+            });
+
+            window.ethereum.on('chainChanged', () => {
+                showMessage("Network changed. Reloading application...", "success");
+                setTimeout(() => window.location.reload(), 2000);
+            });
+        }
+    </script>
+</body>
+</html>

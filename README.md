@@ -29,6 +29,29 @@ Private Traffic Aggregator enables cities and transportation authorities to coll
 
 **GitHub Repository**: [https://github.com/RoseLeannon/TrafficAggregator](https://github.com/RoseLeannon/TrafficAggregator)
 
+### Frontend Implementation Options
+
+This project includes **two frontend implementations** to demonstrate different development approaches:
+
+#### 1. Next.js 14 Application (`/PrivateTrafficAggregator`)
+Modern, production-ready React application featuring:
+- **Server-side rendering (SSR)** with Next.js App Router
+- **TypeScript** for comprehensive type safety
+- **Tailwind CSS** with glassmorphism design system
+- **Custom React hooks** for state management (useWallet, useTrafficContract, useRegions, useCycleInfo)
+- **Hot module replacement** for rapid development
+- **Optimized build** with SWC minification
+- **Component architecture** with separation of concerns
+- **fhevmjs** for client-side FHE encryption
+
+#### 2. Vanilla JavaScript Application (`/public`)
+Lightweight, straightforward implementation with:
+- **Pure HTML5/CSS3/JavaScript** - no framework dependencies
+- **Direct Web3 integration** via Ethers.js
+- **Maximum compatibility** across browsers
+- **Simple deployment** - static hosting ready
+- **Minimal bundle size** for faster loading
+
 ## 📋 Smart Contract Information
 
 ### Deployment Details
@@ -179,11 +202,36 @@ This project represents a significant step forward in privacy-preserving smart c
 
 ### Smart Contract Development
 - **Solidity**: 0.8.24 with Cancun EVM features
-- **FHE Libraries**: Zama's @fhevm/solidity for encryption
+- **FHE Libraries**:
+  - Zama's `@fhevm/solidity` for encryption
+  - `@zama-fhe/oracle-solidity` - Oracle integration
+  - `@zama-fhe/relayer-sdk` - Relayer support
 - **Testing**: Comprehensive test suite with Chai matchers
 - **Optimization**: Enabled with 200 runs for gas efficiency
+- **Code Quality**:
+  - Solhint for Solidity linting
+  - Prettier for code formatting
+  - Husky for git hooks
+  - Lint-staged for pre-commit checks
 
-### Frontend Technology
+### Frontend Technology (Two Versions)
+
+#### Version 1: Next.js Application (`/PrivateTrafficAggregator`)
+- **Framework**: Next.js 14 with App Router
+- **UI Library**: React 18 with TypeScript
+- **Styling**: Tailwind CSS with custom animations and glassmorphism design
+- **FHE Integration**: fhevmjs v0.5.0 for client-side encryption
+- **Build Tools**:
+  - PostCSS with Autoprefixer
+  - SWC for minification
+  - TypeScript 5.3 for type safety
+- **Features**:
+  - Server-side rendering (SSR)
+  - Client-side routing
+  - Responsive design
+  - Modern component architecture with custom hooks
+
+#### Version 2: Vanilla JavaScript (Root)
 - **Vanilla JavaScript**: Maximum compatibility and performance
 - **HTML5/CSS3**: Modern, responsive design
 - **Web3 Integration**: Ethers.js for seamless blockchain connectivity
@@ -194,6 +242,10 @@ This project represents a significant step forward in privacy-preserving smart c
 - **Blockchain**: Zama Sepolia Testnet (Chain ID: 8009)
 - **Contract Verification**: Etherscan integration
 - **CI/CD**: Automated testing and deployment pipelines
+- **Development Tools**:
+  - TypeChain for type-safe contract interactions
+  - Solidity Coverage for test coverage analysis
+  - Audit-CI for security checks
 
 ## 🛠️ Development Setup
 
@@ -259,6 +311,39 @@ npm run test:gas
 
 # Run coverage analysis
 npm run test:coverage
+
+# Run tests on Sepolia testnet
+npm run test:sepolia
+
+# Watch mode for continuous testing
+npm run test:watch
+```
+
+### Code Quality and Linting
+```bash
+# Lint Solidity contracts
+npm run lint:sol
+
+# Lint TypeScript files
+npm run lint:ts
+
+# Run all linters
+npm run lint
+
+# Auto-fix linting issues
+npm run lint:fix
+
+# Format code with Prettier
+npm run format
+
+# Check code formatting
+npm run format:check
+
+# Security audit
+npm run security
+
+# Security check (moderate level)
+npm run security:check
 ```
 
 ### Local Development
@@ -349,7 +434,7 @@ npx hardhat console --network sepolia  # Interactive console
 ## 🔧 Project Structure
 
 ```
-PrivateTrafficAggregator/
+ 
 ├── contracts/                 # Smart contracts
 │   ├── PrivateTrafficAggregator.sol
 │   └── PrivateTrafficAggregatorV2.sol
@@ -359,16 +444,45 @@ PrivateTrafficAggregator/
 │   ├── interact.js           # Contract interaction examples
 │   └── simulate.js           # Full workflow simulation
 ├── test/                      # Contract tests
-├── public/                    # Frontend files
+├── public/                    # Vanilla JS frontend files
 │   ├── index.html
 │   ├── css/
 │   ├── js/
 │   ├── abi/                  # Auto-generated ABIs
 │   └── config/               # Auto-generated configs
+├── PrivateTrafficAggregator/  # Next.js frontend application
+│   ├── app/                  # Next.js App Router
+│   │   ├── layout.tsx        # Root layout
+│   │   ├── page.tsx          # Main application page
+│   │   └── globals.css       # Global styles
+│   ├── components/           # React components
+│   │   ├── ConnectionStatus.tsx
+│   │   ├── NetworkInfo.tsx
+│   │   ├── StatusBar.tsx
+│   │   ├── RegionCard.tsx
+│   │   ├── RegionList.tsx
+│   │   ├── ReportForm.tsx
+│   │   └── AdminControls.tsx
+│   ├── hooks/                # Custom React hooks
+│   │   ├── useWallet.ts      # Wallet connection
+│   │   ├── useTrafficContract.ts  # Contract interactions
+│   │   ├── useRegions.ts     # Region management
+│   │   └── useCycleInfo.ts   # Cycle information
+│   ├── lib/                  # Utilities and constants
+│   │   ├── abi.ts            # Contract ABI
+│   │   ├── constants.ts      # Configuration
+│   │   └── utils.ts          # Helper functions
+│   ├── types/                # TypeScript type definitions
+│   │   ├── index.ts          # Type definitions
+│   │   └── window.d.ts       # Window extensions
+│   ├── next.config.js        # Next.js configuration
+│   ├── tailwind.config.ts    # Tailwind CSS configuration
+│   ├── tsconfig.json         # TypeScript configuration
+│   └── package.json          # Next.js dependencies
 ├── deployments/              # Deployment records
 ├── hardhat.config.ts         # Hardhat configuration
-├── tsconfig.json             # TypeScript configuration
-├── package.json              # Dependencies and scripts
+├── tsconfig.json             # Root TypeScript configuration
+├── package.json              # Root dependencies and scripts
 └── README.md                 # This file
 ```
 
@@ -406,6 +520,36 @@ PrivateTrafficAggregator/
    npm run interact
    ```
 
+4. **Frontend Development (Next.js Version)**
+   ```bash
+   # Navigate to Next.js directory
+   cd PrivateTrafficAggregator
+
+   # Install dependencies
+   npm install
+
+   # Start development server (with hot reload)
+   npm run dev
+   # Visit http://localhost:3000
+
+   # Build for production
+   npm run build
+
+   # Start production server
+   npm start
+
+   # Type checking
+   npm run type-check
+   ```
+
+5. **Frontend Development (Vanilla JS Version)**
+   ```bash
+   # From root directory
+   # Start simple HTTP server
+   npm start
+   # Visit http://localhost:3000
+   ```
+
 ### For Users
 
 1. **Access the Application**
@@ -440,6 +584,81 @@ If automatic verification is not available, use these details:
 - **EVM Version**: cancun
 - **Constructor Arguments**: None
 - **License**: MIT
+
+## 🔄 Development Workflow
+
+### Git Hooks and Pre-commit Checks
+The project uses **Husky** and **lint-staged** to ensure code quality:
+
+```bash
+# Install git hooks
+npm run prepare
+
+# Hooks automatically run on git commit:
+# - ESLint fixes for TS/JS files
+# - Solhint fixes for Solidity files
+# - Prettier formatting for all files
+```
+
+### Continuous Integration
+```bash
+# Run the full CI pipeline locally
+npm run ci
+# This runs: lint → compile → test → coverage
+```
+
+### Development Best Practices
+1. **Branch Strategy**: Create feature branches from main
+2. **Testing**: Write tests before committing new features
+3. **Code Review**: Ensure all tests pass and coverage is maintained
+4. **Security**: Run `npm run security:check` before pushing
+5. **Documentation**: Update README when adding new features
+
+## 🎨 Component Architecture (Next.js Version)
+
+The Next.js application follows a modular architecture:
+
+### Custom Hooks
+- **useWallet.ts**: Manages wallet connection and contract initialization
+- **useTrafficContract.ts**: Handles all smart contract interactions
+- **useRegions.ts**: Manages region data and statistics
+- **useCycleInfo.ts**: Tracks cycle information and updates
+
+### Components
+- **ConnectionStatus.tsx**: Displays wallet connection state
+- **NetworkInfo.tsx**: Shows network information and contract details
+- **StatusBar.tsx**: Comprehensive status display
+- **RegionCard.tsx**: Individual region information card
+- **RegionList.tsx**: List view of all regions
+- **ReportForm.tsx**: Traffic report submission form
+- **AdminControls.tsx**: Administrative functions
+
+### Design Patterns
+- **Separation of Concerns**: Business logic in hooks, UI in components
+- **Type Safety**: Full TypeScript coverage
+- **Responsive Design**: Mobile-first approach with Tailwind CSS
+- **Error Handling**: Comprehensive error boundaries and user feedback
+
+## 📚 Additional Resources
+
+### Documentation Files
+- `DEVELOPMENT_GUIDE.md` - Detailed development instructions
+- `DEPLOYMENT_GUIDE.md` - Step-by-step deployment guide
+- `TECHNICAL_DOCUMENTATION.md` - Technical architecture details
+- `TESTING.md` - Testing strategy and guidelines
+- `SECURITY_AND_PERFORMANCE.md` - Security best practices
+
+### Scripts Overview
+| Script | Purpose |
+|--------|---------|
+| `npm run compile` | Compile Solidity contracts |
+| `npm run test` | Run test suite |
+| `npm run deploy:sepolia` | Deploy to Sepolia testnet |
+| `npm run simulate` | Run full workflow simulation |
+| `npm run lint` | Check code quality |
+| `npm run format` | Format all code |
+| `npm run security` | Run security audit |
+| `npm run ci` | Full CI pipeline |
 
 ---
 
