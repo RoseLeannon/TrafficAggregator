@@ -193,7 +193,7 @@ npm run deploy
 
 ## Usage Example
 
-### 1. Create Trading Market
+### 1. Create 
 
 ```javascript
 const tx = await contract.createTrade(
@@ -303,7 +303,7 @@ REFUND_TIMEOUT = 14 days
 ```
 D:\/
 ├── contracts/
-│   └── SecureTradingPlatform.sol
+│   └
 ├── docs/
 │   ├── ARCHITECTURE.md
 │   └── API.md
@@ -326,18 +326,7 @@ D:\/
 | `requestDecryption()` | ~100k | 2 | ~105k |
 | `claimPrize()` | ~50k | 0 | ~50k |
 
-## Comparison with Reference Project
 
-| Feature | Zamabelief | SecureTradingPlatform |
-|---------|------------|----------------------|
-| Gateway Callback | ✓ | ✓ Enhanced |
-| Refund Mechanism | Tie only | **Tie + Timeout + Emergency** |
-| Timeout Protection | ✗ | **✓ 7/14 days** |
-| Privacy Division | ✗ | **✓ Obfuscation** |
-| Price Obfuscation | Basic | **✓ Random multiplier** |
-| Overflow Protection | Basic | **✓ Comprehensive** |
-| HCU Tracking | ✗ | **✓ Optimized** |
-| Blacklist System | ✗ | **✓ Included** |
 
 ## Future Enhancements
 
