@@ -1,0 +1,653 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+import { FHE, euint8, euint16, euint32, ebool, einput, inEuint8, inEuint16 } from "@fhevm/solidity/lib/FHE.sol";
+import { SepoliaConfig } from "@fhevm/solidity/config/ZamaConfig.sol";
+import { Gateway } from "@fhevm/solidity/lib/Gateway.sol";
+
+/**
+ * @title PrivateTrafficAggregatorV2
+ * @notice Advanced traffic data aggregation with FHE encryption, Gateway integration, and comprehensive access controls
+ * @dev Implements fail-closed design, pausable mechanism, and encrypted data callbacks
+ */
+contract PrivateTrafficAggregatorV2 is SepoliaConfig {
+
+    /*//////////////////////////////////////////////////////////////
+                                STORAGE
+    //////////////////////////////////////////////////////////////*/
+
+    address public admin;
+    bool public paused;
+
+    uint256 public currentReportCycle;
+    uint256 public cycleInterval = 3600; // 1 hour default
+    uint256 public lastCycleTime;
+
+    // Encrypted thresholds for alerts
+    euint8 public criticalCongestionThreshold;
+    euint16 public speedLimitThreshold;
+
+    struct TrafficReport {
+        euint8 congestionLevel;    // 0-100 (encrypted)
+        euint8 vehicleCount;       // 0-255 (encrypted)
+        euint16 averageSpeed;      // km/h (encrypted)
+        uint256 timestamp;
+        address reporter;
+        bool isValid;
+        bool verified;             // Input proof verification status
+    }
+
+    struct RegionData {
+        uint256 totalReports;
+        euint32 aggregatedCongestion;
+        euint32 aggregatedVehicles;
+        euint32 aggregatedSpeed;
+        uint256 lastUpdate;
+        address[] reporters;
+        bool hasData;
+        bool isDecrypted;
+        // Decrypted aggregates (available after Gateway callback)
+        uint32 decryptedAvgCongestion;
+        uint32 decryptedAvgVehicles;
+        uint32 decryptedAvgSpeed;
+    }
+
+    struct CycleAggregate {
+        uint256 totalReports;
+        uint256 totalRegions;
+        uint256 timestamp;
+        bool isFinalized;
+        mapping(string => bool) processedRegions;
+    }
+
+    struct DecryptionRequest {
+        string region;
+        uint256 cycle;
+        address requester;
+        uint256 timestamp;
+        bool fulfilled;
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                                MAPPINGS
+    //////////////////////////////////////////////////////////////*/
+
+    mapping(uint256 => mapping(string => RegionData)) public regionData;
+    mapping(uint256 => mapping(string => mapping(address => TrafficReport))) public reports;
+    mapping(uint256 => CycleAggregate) public cycleAggregates;
+    mapping(address => bool) public authorizedReporters;
+    mapping(address => bool) public pausers;
+    mapping(string => bool) public validRegions;
+    mapping(uint256 => DecryptionRequest) public decryptionRequests;
+
+    string[] public registeredRegions;
+    uint256 public decryptionRequestCounter;
+
+    /*//////////////////////////////////////////////////////////////
+                                EVENTS
+    //////////////////////////////////////////////////////////////*/
+
+    event ReportSubmitted(address indexed reporter, string region, uint256 cycle, uint256 timestamp);
+    event CycleFinalized(uint256 indexed cycle, uint256 totalReports, uint256 totalRegions);
+    event RegionRegistered(string region, uint256 timestamp);
+    event ReporterAuthorized(address indexed reporter, address indexed authorizer);
+    event ReporterRevoked(address indexed reporter, address indexed revoker);
+    event Paused(address indexed pauser);
+    event Unpaused(address indexed pauser);
+    event PauserAdded(address indexed pauser, address indexed admin);
+    event PauserRemoved(address indexed pauser, address indexed admin);
+    event DecryptionRequested(uint256 indexed requestId, string region, uint256 cycle);
+    event DecryptionFulfilled(uint256 indexed requestId, string region, uint256 cycle);
+    event ThresholdAlertTriggered(string region, uint256 cycle, string alertType);
+    event AdminTransferred(address indexed oldAdmin, address indexed newAdmin);
+    event EmergencyWithdraw(address indexed admin, uint256 amount);
+
+    /*//////////////////////////////////////////////////////////////
+                                ERRORS
+    //////////////////////////////////////////////////////////////*/
+
+    error Unauthorized(address caller);
+    error ContractPaused();
+    error InvalidRegion(string region);
+    error InvalidInput(string reason);
+    error AlreadyReported(address reporter, string region, uint256 cycle);
+    error CycleNotFinalized(uint256 cycle);
+    error DecryptionPending(uint256 requestId);
+
+    /*//////////////////////////////////////////////////////////////
+                                MODIFIERS
+    //////////////////////////////////////////////////////////////*/
+
+    modifier onlyAdmin() {
+        if (msg.sender != admin) revert Unauthorized(msg.sender);
+        _;
+    }
+
+    modifier onlyAuthorizedReporter() {
+        if (!authorizedReporters[msg.sender]) revert Unauthorized(msg.sender);
+        _;
+    }
+
+    modifier onlyPauser() {
+        if (!pausers[msg.sender] && msg.sender != admin) revert Unauthorized(msg.sender);
+        _;
+    }
+
+    modifier whenNotPaused() {
+        if (paused) revert ContractPaused();
+        _;
+    }
+
+    modifier validRegion(string memory region) {
+        if (!validRegions[region]) revert InvalidRegion(region);
+        _;
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                            CONSTRUCTOR
+    //////////////////////////////////////////////////////////////*/
+
+    constructor() {
+        admin = msg.sender;
+        currentReportCycle = 1;
+        lastCycleTime = block.timestamp;
+        authorizedReporters[msg.sender] = true;
+        pausers[msg.sender] = true;
+
+        // Initialize encrypted thresholds
+        criticalCongestionThreshold = FHE.asEuint8(80); // 80% congestion
+        speedLimitThreshold = FHE.asEuint16(120); // 120 km/h
+
+        FHE.allowThis(criticalCongestionThreshold);
+        FHE.allowThis(speedLimitThreshold);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                        REGION MANAGEMENT
+    //////////////////////////////////////////////////////////////*/
+
+    /**
+     * @notice Register a new traffic monitoring region
+     * @param regionName Name of the region (must be unique and non-empty)
+     */
+    function registerRegion(string memory regionName) external onlyAdmin whenNotPaused {
+        if (validRegions[regionName]) revert InvalidInput("Region already registered");
+        if (bytes(regionName).length == 0) revert InvalidInput("Region name cannot be empty");
+        if (bytes(regionName).length > 64) revert InvalidInput("Region name too long");
+
+        validRegions[regionName] = true;
+        registeredRegions.push(regionName);
+
+        emit RegionRegistered(regionName, block.timestamp);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                    REPORTER AUTHORIZATION
+    //////////////////////////////////////////////////////////////*/
+
+    /**
+     * @notice Authorize a reporter to submit traffic data
+     * @param reporter Address of the reporter
+     */
+    function authorizeReporter(address reporter) external onlyAdmin {
+        if (reporter == address(0)) revert InvalidInput("Invalid reporter address");
+        authorizedReporters[reporter] = true;
+        emit ReporterAuthorized(reporter, msg.sender);
+    }
+
+    /**
+     * @notice Revoke reporter authorization
+     * @param reporter Address of the reporter
+     */
+    function revokeReporter(address reporter) external onlyAdmin {
+        authorizedReporters[reporter] = false;
+        emit ReporterRevoked(reporter, msg.sender);
+    }
+
+    /**
+     * @notice Batch authorize multiple reporters
+     * @param reporters Array of reporter addresses
+     */
+    function batchAuthorizeReporters(address[] calldata reporters) external onlyAdmin {
+        for (uint i = 0; i < reporters.length; i++) {
+            if (reporters[i] != address(0)) {
+                authorizedReporters[reporters[i]] = true;
+                emit ReporterAuthorized(reporters[i], msg.sender);
+            }
+        }
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                    TRAFFIC REPORT SUBMISSION
+    //////////////////////////////////////////////////////////////*/
+
+    /**
+     * @notice Submit encrypted traffic report for a region
+     * @param region Region identifier
+     * @param inputProof Encrypted input proof for validation
+     * @param inputCongestion Encrypted congestion level input
+     * @param inputVehicles Encrypted vehicle count input
+     * @param inputSpeed Encrypted speed input
+     */
+    function submitTrafficReportWithProof(
+        string memory region,
+        einput inputProof,
+        inEuint8 memory inputCongestion,
+        inEuint8 memory inputVehicles,
+        inEuint16 memory inputSpeed
+    ) external onlyAuthorizedReporter whenNotPaused validRegion(region) {
+        if (reports[currentReportCycle][region][msg.sender].isValid) {
+            revert AlreadyReported(msg.sender, region, currentReportCycle);
+        }
+
+        // Check if cycle should advance
+        if (block.timestamp >= lastCycleTime + cycleInterval) {
+            _finalizeCycle();
+            _advanceCycle();
+        }
+
+        // Verify and convert encrypted inputs (ZKPoK verification)
+        euint8 encCongestion = FHE.asEuint8(inputCongestion, inputProof);
+        euint8 encVehicles = FHE.asEuint8(inputVehicles, inputProof);
+        euint16 encSpeed = FHE.asEuint16(inputSpeed, inputProof);
+
+        // Validate encrypted inputs (fail-closed design)
+        ebool validCongestion = FHE.lte(encCongestion, FHE.asEuint8(100));
+        ebool validSpeed = FHE.lte(encSpeed, FHE.asEuint16(300));
+
+        // Fail if validation fails
+        FHE.req(validCongestion);
+        FHE.req(validSpeed);
+
+        // Store the report
+        reports[currentReportCycle][region][msg.sender] = TrafficReport({
+            congestionLevel: encCongestion,
+            vehicleCount: encVehicles,
+            averageSpeed: encSpeed,
+            timestamp: block.timestamp,
+            reporter: msg.sender,
+            isValid: true,
+            verified: true
+        });
+
+        // Update region aggregates with homomorphic operations
+        _updateRegionAggregates(region, encCongestion, encVehicles, encSpeed);
+
+        // Check for threshold alerts
+        _checkThresholdAlerts(region, encCongestion, encSpeed);
+
+        emit ReportSubmitted(msg.sender, region, currentReportCycle, block.timestamp);
+    }
+
+    /**
+     * @notice Submit traffic report with plaintext values (automatically encrypted)
+     * @dev For backward compatibility and simpler integration
+     */
+    function submitTrafficReport(
+        string memory region,
+        uint8 congestionLevel,
+        uint8 vehicleCount,
+        uint16 averageSpeed
+    ) external onlyAuthorizedReporter whenNotPaused validRegion(region) {
+        // Input validation (fail-closed)
+        if (congestionLevel > 100) revert InvalidInput("Congestion level must be 0-100");
+        if (averageSpeed > 300) revert InvalidInput("Speed limit exceeded");
+        if (reports[currentReportCycle][region][msg.sender].isValid) {
+            revert AlreadyReported(msg.sender, region, currentReportCycle);
+        }
+
+        // Check if cycle should advance
+        if (block.timestamp >= lastCycleTime + cycleInterval) {
+            _finalizeCycle();
+            _advanceCycle();
+        }
+
+        // Encrypt the traffic data
+        euint8 encCongestion = FHE.asEuint8(congestionLevel);
+        euint8 encVehicles = FHE.asEuint8(vehicleCount);
+        euint16 encSpeed = FHE.asEuint16(averageSpeed);
+
+        // Store the report
+        reports[currentReportCycle][region][msg.sender] = TrafficReport({
+            congestionLevel: encCongestion,
+            vehicleCount: encVehicles,
+            averageSpeed: encSpeed,
+            timestamp: block.timestamp,
+            reporter: msg.sender,
+            isValid: true,
+            verified: false
+        });
+
+        // Update region aggregates
+        _updateRegionAggregates(region, encCongestion, encVehicles, encSpeed);
+
+        emit ReportSubmitted(msg.sender, region, currentReportCycle, block.timestamp);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                        INTERNAL FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    function _updateRegionAggregates(
+        string memory region,
+        euint8 congestion,
+        euint8 vehicles,
+        euint16 speed
+    ) internal {
+        RegionData storage regionStats = regionData[currentReportCycle][region];
+
+        if (!regionStats.hasData) {
+            regionStats.aggregatedCongestion = FHE.asEuint32(congestion);
+            regionStats.aggregatedVehicles = FHE.asEuint32(vehicles);
+            regionStats.aggregatedSpeed = FHE.asEuint32(speed);
+            regionStats.hasData = true;
+        } else {
+            // Homomorphic addition
+            regionStats.aggregatedCongestion = FHE.add(
+                regionStats.aggregatedCongestion,
+                FHE.asEuint32(congestion)
+            );
+            regionStats.aggregatedVehicles = FHE.add(
+                regionStats.aggregatedVehicles,
+                FHE.asEuint32(vehicles)
+            );
+            regionStats.aggregatedSpeed = FHE.add(
+                regionStats.aggregatedSpeed,
+                FHE.asEuint32(speed)
+            );
+        }
+
+        regionStats.totalReports++;
+        regionStats.lastUpdate = block.timestamp;
+        regionStats.reporters.push(msg.sender);
+
+        // Set ACL permissions for contract
+        FHE.allowThis(regionStats.aggregatedCongestion);
+        FHE.allowThis(regionStats.aggregatedVehicles);
+        FHE.allowThis(regionStats.aggregatedSpeed);
+    }
+
+    function _checkThresholdAlerts(
+        string memory region,
+        euint8 congestion,
+        euint16 speed
+    ) internal {
+        // Check critical congestion threshold
+        ebool isCriticalCongestion = FHE.gte(congestion, criticalCongestionThreshold);
+
+        // Check speed threshold
+        ebool isOverSpeedLimit = FHE.gt(speed, speedLimitThreshold);
+
+        // Decrypt alerts to trigger events (in production, use Gateway)
+        // For now, we rely on encrypted comparisons
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                        GATEWAY INTEGRATION
+    //////////////////////////////////////////////////////////////*/
+
+    /**
+     * @notice Request decryption of region aggregates via Gateway
+     * @param region Region identifier
+     * @param cycle Report cycle
+     * @return requestId Decryption request ID
+     */
+    function requestRegionDecryption(
+        string memory region,
+        uint256 cycle
+    ) external onlyAdmin returns (uint256 requestId) {
+        RegionData storage regionStats = regionData[cycle][region];
+        if (!regionStats.hasData) revert InvalidInput("No data for region");
+        if (regionStats.isDecrypted) revert InvalidInput("Already decrypted");
+
+        requestId = decryptionRequestCounter++;
+
+        // Prepare ciphertexts for decryption
+        uint256[] memory cts = new uint256[](3);
+        cts[0] = Gateway.toUint256(regionStats.aggregatedCongestion);
+        cts[1] = Gateway.toUint256(regionStats.aggregatedVehicles);
+        cts[2] = Gateway.toUint256(regionStats.aggregatedSpeed);
+
+        // Store request metadata
+        decryptionRequests[requestId] = DecryptionRequest({
+            region: region,
+            cycle: cycle,
+            requester: msg.sender,
+            timestamp: block.timestamp,
+            fulfilled: false
+        });
+
+        // Request Gateway decryption
+        Gateway.requestDecryption(
+            cts,
+            this.callbackRegionStats.selector,
+            0,
+            block.timestamp + 1 days,
+            false
+        );
+
+        emit DecryptionRequested(requestId, region, cycle);
+        return requestId;
+    }
+
+    /**
+     * @notice Gateway callback for decrypted region statistics
+     * @param requestId Decryption request ID
+     * @param decryptedCongestion Decrypted aggregated congestion
+     * @param decryptedVehicles Decrypted aggregated vehicles
+     * @param decryptedSpeed Decrypted aggregated speed
+     */
+    function callbackRegionStats(
+        uint256 requestId,
+        uint32 decryptedCongestion,
+        uint32 decryptedVehicles,
+        uint32 decryptedSpeed
+    ) external onlyGateway {
+        DecryptionRequest storage request = decryptionRequests[requestId];
+        if (request.fulfilled) revert InvalidInput("Request already fulfilled");
+
+        RegionData storage regionStats = regionData[request.cycle][request.region];
+
+        // Calculate averages
+        if (regionStats.totalReports > 0) {
+            regionStats.decryptedAvgCongestion = decryptedCongestion / uint32(regionStats.totalReports);
+            regionStats.decryptedAvgVehicles = decryptedVehicles / uint32(regionStats.totalReports);
+            regionStats.decryptedAvgSpeed = decryptedSpeed / uint32(regionStats.totalReports);
+        }
+
+        regionStats.isDecrypted = true;
+        request.fulfilled = true;
+
+        emit DecryptionFulfilled(requestId, request.region, request.cycle);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                        CYCLE MANAGEMENT
+    //////////////////////////////////////////////////////////////*/
+
+    function _finalizeCycle() internal {
+        if (cycleAggregates[currentReportCycle].isFinalized) return;
+
+        uint256 totalGlobalReports = 0;
+        uint256 activeRegions = 0;
+
+        for (uint i = 0; i < registeredRegions.length; i++) {
+            string memory region = registeredRegions[i];
+            RegionData storage regionStats = regionData[currentReportCycle][region];
+
+            if (regionStats.hasData && regionStats.totalReports > 0) {
+                totalGlobalReports += regionStats.totalReports;
+                activeRegions++;
+            }
+        }
+
+        cycleAggregates[currentReportCycle].totalReports = totalGlobalReports;
+        cycleAggregates[currentReportCycle].totalRegions = activeRegions;
+        cycleAggregates[currentReportCycle].timestamp = block.timestamp;
+        cycleAggregates[currentReportCycle].isFinalized = true;
+
+        emit CycleFinalized(currentReportCycle, totalGlobalReports, activeRegions);
+    }
+
+    function _advanceCycle() internal {
+        currentReportCycle++;
+        lastCycleTime = block.timestamp;
+    }
+
+    function manuallyFinalizeCycle() external onlyAdmin {
+        if (cycleAggregates[currentReportCycle].isFinalized) {
+            revert InvalidInput("Cycle already finalized");
+        }
+        _finalizeCycle();
+    }
+
+    function forceAdvanceCycle() external onlyAdmin {
+        _finalizeCycle();
+        _advanceCycle();
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                    PAUSABLE FUNCTIONALITY
+    //////////////////////////////////////////////////////////////*/
+
+    function pause() external onlyPauser {
+        paused = true;
+        emit Paused(msg.sender);
+    }
+
+    function unpause() external onlyPauser {
+        paused = false;
+        emit Unpaused(msg.sender);
+    }
+
+    function addPauser(address pauser) external onlyAdmin {
+        if (pauser == address(0)) revert InvalidInput("Invalid pauser address");
+        pausers[pauser] = true;
+        emit PauserAdded(pauser, msg.sender);
+    }
+
+    function removePauser(address pauser) external onlyAdmin {
+        pausers[pauser] = false;
+        emit PauserRemoved(pauser, msg.sender);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                        VIEW FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    function getCurrentCycleInfo() external view returns (
+        uint256 cycle,
+        uint256 timeRemaining,
+        uint256 totalRegions,
+        bool isPaused
+    ) {
+        uint256 elapsed = block.timestamp - lastCycleTime;
+        uint256 remaining = elapsed >= cycleInterval ? 0 : cycleInterval - elapsed;
+
+        return (currentReportCycle, remaining, registeredRegions.length, paused);
+    }
+
+    function getRegionStats(string memory region, uint256 cycle) external view returns (
+        uint256 totalReports,
+        uint256 lastUpdate,
+        bool hasData,
+        bool isDecrypted,
+        uint32 avgCongestion,
+        uint32 avgVehicles,
+        uint32 avgSpeed
+    ) {
+        RegionData storage regionStats = regionData[cycle][region];
+        return (
+            regionStats.totalReports,
+            regionStats.lastUpdate,
+            regionStats.hasData,
+            regionStats.isDecrypted,
+            regionStats.decryptedAvgCongestion,
+            regionStats.decryptedAvgVehicles,
+            regionStats.decryptedAvgSpeed
+        );
+    }
+
+    function getDecryptionRequest(uint256 requestId) external view returns (
+        string memory region,
+        uint256 cycle,
+        address requester,
+        uint256 timestamp,
+        bool fulfilled
+    ) {
+        DecryptionRequest storage request = decryptionRequests[requestId];
+        return (request.region, request.cycle, request.requester, request.timestamp, request.fulfilled);
+    }
+
+    function getCycleAggregate(uint256 cycle) external view returns (
+        uint256 totalReports,
+        uint256 totalRegions,
+        uint256 timestamp,
+        bool isFinalized
+    ) {
+        CycleAggregate storage aggregate = cycleAggregates[cycle];
+        return (
+            aggregate.totalReports,
+            aggregate.totalRegions,
+            aggregate.timestamp,
+            aggregate.isFinalized
+        );
+    }
+
+    function hasReported(string memory region, address reporter, uint256 cycle) external view returns (bool) {
+        return reports[cycle][region][reporter].isValid;
+    }
+
+    function getRegisteredRegions() external view returns (string[] memory) {
+        return registeredRegions;
+    }
+
+    function getRegionReporters(string memory region, uint256 cycle) external view returns (address[] memory) {
+        return regionData[cycle][region].reporters;
+    }
+
+    function isReporterAuthorized(address reporter) external view returns (bool) {
+        return authorizedReporters[reporter];
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                    CONFIGURATION FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    function setCycleInterval(uint256 newInterval) external onlyAdmin {
+        if (newInterval < 300) revert InvalidInput("Minimum 5 minutes");
+        if (newInterval > 86400) revert InvalidInput("Maximum 24 hours");
+        cycleInterval = newInterval;
+    }
+
+    function setThresholds(uint8 congestionThreshold, uint16 speedThreshold) external onlyAdmin {
+        if (congestionThreshold > 100) revert InvalidInput("Invalid congestion threshold");
+
+        criticalCongestionThreshold = FHE.asEuint8(congestionThreshold);
+        speedLimitThreshold = FHE.asEuint16(speedThreshold);
+
+        FHE.allowThis(criticalCongestionThreshold);
+        FHE.allowThis(speedLimitThreshold);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                    EMERGENCY FUNCTIONS
+    //////////////////////////////////////////////////////////////*/
+
+    function emergencyWithdraw() external onlyAdmin {
+        uint256 balance = address(this).balance;
+        if (balance > 0) {
+            payable(admin).transfer(balance);
+            emit EmergencyWithdraw(admin, balance);
+        }
+    }
+
+    function transferAdmin(address newAdmin) external onlyAdmin {
+        if (newAdmin == address(0)) revert InvalidInput("Invalid admin address");
+        address oldAdmin = admin;
+        admin = newAdmin;
+        emit AdminTransferred(oldAdmin, newAdmin);
+    }
+
+    receive() external payable {}
+}
