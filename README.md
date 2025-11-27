@@ -25,7 +25,9 @@ Private Traffic Aggregator enables cities and transportation authorities to coll
 
 ## 🌐 Live Application
 
-**Website**: [https://private-traffic-aggregator.vercel.app/](https://private-traffic-aggregator.vercel.app/)
+**Website**: [https://private-traffic-aggregator.vercel.app/](https://private-traffic-aggregator.vercel.app/) 
+
+**Video**:   [https://streamable.com/7t6w8m](https://streamable.com/7t6w8m) 
 
 **GitHub Repository**: [https://github.com/RoseLeannon/PrivateTrafficAggregator](https://github.com/RoseLeannon/PrivateTrafficAggregator)
 
